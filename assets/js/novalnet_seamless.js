@@ -10,9 +10,19 @@
  *
  * Script: novalnet_seamless.js
  */
-var button = "document.querySelector('#payment').requestSubmit();";
-document.querySelector('button[onclick="' + button + '"]').setAttribute("id", "placeorder");
-document.querySelector('button[onclick="' + button + '"]').removeAttribute("onclick");
+var form = document.querySelector('#payment');
+var button;
+
+if (typeof form.requestSubmit === "function") {
+    button = document.querySelector('button[onclick*="requestSubmit"]');
+} else if (typeof form.submit === "function") {
+    button = document.querySelector('button[onclick*="submit"]');
+}
+
+if (button) {
+    button.setAttribute("id", "placeorder");
+    button.removeAttribute("onclick");
+}
 
 var submitButton = document.querySelector('#placeorder');
 submitButton.style.display = 'none';
