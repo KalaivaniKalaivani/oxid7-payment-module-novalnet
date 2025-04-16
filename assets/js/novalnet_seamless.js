@@ -10,18 +10,22 @@
  *
  * Script: novalnet_seamless.js
  */
-var form = document.querySelector('#payment');
-var button;
+const allButtons = document.querySelectorAll('button');
+let paymentSubmitButton = null;
 
-if (typeof form.requestSubmit === "function") {
-    button = document.querySelector('button[onclick*="requestSubmit"]');
-} else if (typeof form.submit === "function") {
-    button = document.querySelector('button[onclick*="submit"]');
-}
+allButtons.forEach(button => {
+    const onclickValue = button.getAttribute('onclick');
 
-if (button) {
-    button.setAttribute("id", "placeorder");
-    button.removeAttribute("onclick");
+    if (onclickValue === "document.querySelector('#payment').requestSubmit();") {
+        paymentSubmitButton = button;
+    } else if (onclickValue === "document.getElementById('payment').submit();") {
+        paymentSubmitButton = button;
+    }
+});
+
+if (paymentSubmitButton) {
+    paymentSubmitButton.setAttribute('id', 'placeorder');
+    paymentSubmitButton.removeAttribute('onclick');
 }
 
 var submitButton = document.querySelector('#placeorder');
