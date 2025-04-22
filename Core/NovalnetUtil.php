@@ -660,10 +660,6 @@ class NovalnetUtil
     public static function checkWebhookIp(string $novalnetHostIp)
     {
 		$ipKeys = ['HTTP_X_FORWARDED_HOST', 'HTTP_CLIENT_IP', 'HTTP_X_REAL_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_FORWARDED', 'HTTP_X_CLUSTER_CLIENT_IP', 'HTTP_FORWARDED_FOR', 'HTTP_FORWARDED', 'REMOTE_ADDR'];
-       
-       //~ $_SERVER['HTTP_X_FORWARDED_FOR'] = '176.2.147.235,34.243.1.205,213.95.190.5,213.95.190.4';
-//~ $_SERVER['HTTP_X_FORWARDED_HOST'] = '213.95.190.5,176.2.147.236,34.243.1.205,213.95.190.4';
-       
         foreach ($ipKeys as $key) {
             if (array_key_exists($key, $_SERVER) === true) {
                 if (in_array($key, ['HTTP_X_FORWARDED_HOST', 'HTTP_X_FORWARDED_FOR'])) {
