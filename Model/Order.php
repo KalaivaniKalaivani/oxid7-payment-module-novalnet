@@ -333,6 +333,6 @@ class Order extends Order_parent
                 $this->oxorder__oxpaymenttype->value = 'NOVALNET_' . $sPaymentName['PAYMENT_TYPE'];
             }
         }
-        return $this->isLoaded;
+        return $this->_isLoaded;
     }
 }
