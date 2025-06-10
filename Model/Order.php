@@ -102,25 +102,34 @@ class Order extends Order_parent
         if (!empty($aResponse['booking_details']['payment_action'])) {
             $this->oNovalnetSession->setVariable('sNovalnetPaymentAction', $aResponse['booking_details']['payment_action']);
         }
+        if(!empty($this->oNovalnetSession->getVariable('oxidId')) && !empty($this->oNovalnetSession->getVariable('sess_challenge')) && $this->oNovalnetSession->getVariable('sess_challenge') != $this->oNovalnetSession->getVariable('oxidId')){
+			$orderNo = NovalnetUtil::getTableValues('OXORDERNR', 'oxorder', 'OXID', $this->oNovalnetSession->getVariable('oxidId'));
+			if($orderNo['OXORDERNR'] == 0){
+				$oOrder = oxNew(Order::class);
+				$oOrder->delete($this->oNovalnetSession->getVariable('oxidId'));
+				$this->oNovalnetSession->deleteVariable('oxidId');
+			}
+		}
+
         if (empty(NovalnetUtil::getRequestParameter('tid')) && empty(NovalnetUtil::getRequestParameter('status'))) {
             $sGetChallenge = $this->oNovalnetSession->getVariable('sess_challenge');
-            if ($this->checkOrderExist($sGetChallenge)) {
+            if ($this->checkOrderExist($sGetChallenge) && !$this->oNovalnetSession->getVariable('sRedirectPaymentProcessed')) {
                 \OxidEsales\Eshop\Core\Registry::getLogger()->debug('BLOCKER ' . $sGetChallenge, [$oBasket, $oUser]);
                 return self::ORDER_STATE_ORDEREXISTS;
             }
             if (!$blRecalculatingOrder) {
                 $this->setId($sGetChallenge);
-                if ($iOrderState = $this->validateOrder($oBasket, $oUser)) {
+                if ($iOrderState = $this->validateOrder($oBasket, $oUser) && !$this->oNovalnetSession->getVariable('sRedirectPaymentProcessed') ) {
                     return $iOrderState;
                 }
             }
             $this->assignUserInformation($oUser);
             $this->loadFromBasket($oBasket);
             $oUserPayment = $this->setPayment($oBasket->getPaymentId());
-
             $this->oNovalnetSession->setVariable('oUser', serialize($oUser));
             $this->oNovalnetSession->setVariable('oBasket', serialize($oBasket));
             $this->oNovalnetSession->setVariable('oUserPayment', serialize($oUserPayment));
+            $this->oNovalnetSession->setVariable('oxidId', $this->oxorder__oxid->value);
             if (!$blRecalculatingOrder) {
                 $this->setFolder();
             }
@@ -129,6 +138,7 @@ class Order extends Order_parent
             $this->oNovalnetSession->setVariable('blSave', $blSave);
         }
         if ((isset($aResponse['payment_details']['process_mode']) && $aResponse['payment_details']['process_mode'] == 'direct') || !empty(NovalnetUtil::getRequestParameter('tid'))) {
+	     $this->oNovalnetSession->deleteVariable('sRedirectPaymentProcessed');
             if (!$blRecalculatingOrder) {
                 $oBasket =  unserialize($this->oNovalnetSession->getVariable('oBasket'));
                 $oUser   = unserialize($this->oNovalnetSession->getVariable('oUser'));
@@ -140,57 +150,66 @@ class Order extends Order_parent
                 }
             }
         }
-        if ((isset($aResponse['payment_details']['process_mode']) && $aResponse['payment_details']['process_mode'] == 'direct') || empty(NovalnetUtil::getRequestParameter('tid'))) {
-            if (empty($this->oxorder__oxordernr->value)) {
-                $this->setNumber();
-            } else {
-                oxNew(Counter::class)->update($this->getCounterIdent(), $this->oxorder__oxordernr->value);
-            }
-            $this->oNovalnetSession->setVariable('dNnOrderNo', $this->oxorder__oxordernr->value);
-        }
         if (isset($aResponse['payment_details']['process_mode']) && $aResponse['payment_details']['process_mode'] == 'redirect' && empty(NovalnetUtil::getRequestParameter('tid'))) {
             $this->oNovalnetSession->setVariable('sNovalnetProcessMode', $aResponse['payment_details']['process_mode']);
             $this->oNovalnetSession->setVariable('sPaymentId', $oBasket->getPaymentId());
-            // logs the transaction credentials
+            $this->oNovalnetSession->setVariable('sRedirectPaymentProcessed', true);
+            $this->oNovalnetSession->deleteVariable('sess_challenge');
             $sPaymentName = !empty($this->oNovalnetSession->getVariable('sNovalnetPaymentName')) ? $this->oNovalnetSession->getVariable('sNovalnetPaymentName') : '';
-            $this->oDb->execute('INSERT INTO novalnet_transaction_detail (ORDER_NO, PAYMENT_TYPE) VALUES (?, ?)', [$this->oxorder__oxordernr->value, $sPaymentName]);
             return NovalnetUtil::doPayment($this);
-        }
-        if ($this->oNovalnetSession->getVariable('sNovalnetProcessMode') == 'redirect') {
-            $this->oNovalnetSession->deleteVariable('ordrem');
-        }
-        if (!$blRecalculatingOrder) {
-            if ($aResponse['payment_details']['process_mode'] == 'direct') {
-                $sPaymentName = !empty($this->oNovalnetSession->getVariable('sNovalnetPaymentName')) ? $this->oNovalnetSession->getVariable('sNovalnetPaymentName') : '';
-                $this->oDb->execute('INSERT INTO novalnet_transaction_detail (ORDER_NO, PAYMENT_TYPE) VALUES (?, ?)', [$this->oxorder__oxordernr->value, $sPaymentName]);
-            }
-            $this->logNovalnetTransaction();
-            if ($aResponse['payment_details']['process_mode'] == 'direct') {
-                $this->updateOrderNumber(); // Send post back call to update order number
-            }
-            NovalnetUtil::clearNovalnetSession();
-        }
-        $this->setOrderStatus('OK');
-        $sOrderid = ($this->oNovalnetSession->getVariable('dNnOrderNo')) ? $this->oNovalnetSession->getVariable('dNnOrderNo') : $this->getId();
-        $oBasket->setOrderId($sOrderid);
-        $this->updateWishlist($oBasket->getContents(), $oUser);
-        $this->updateNoticeList($oBasket->getContents(), $oUser);
-        if (!$blRecalculatingOrder) {
-            $this->updateOrderDate();
-            $this->markVouchers($oBasket, $oUser);
-            if ($this->oNovalnetSession->getVariable('sNovalnetProcessMode') == 'redirect') {
-                $sOrderId = $this->oNovalnetSession->getVariable('blSave');
-                NovalnetUtil::updateTableValues('oxorder', ['OXTRANSSTATUS' => 'OK'], 'oxid', $sOrderId);
-                $oBasket = unserialize($this->oNovalnetSession->getVariable('oBasket'));
-                $iRet = $this->nnSendOrderByEmail($sOrderId, $oBasket);
-            } else {
-                $iRet = $this->sendOrderByEmail($oUser, $oBasket, $oUserPayment);
-            }
-        } else {
-            $iRet = self::ORDER_STATE_OK;
-        }
-        NovalnetUtil::clearNovalnetRedirectSession();
-        return $iRet;
+        };
+		$this->aNovalnetDatas    = $this->oNovalnetSession->getVariable('aNovalnetGatewayResponse');
+
+		if (empty($this->oxorder__oxordernr->value)) {
+				$oDb  = DatabaseProvider::getDb();
+				$iCnt = oxNew(Counter::class)->getNext($this->getCounterIdent());
+				$sQ = "update oxorder set oxordernr = :oxordernr where oxid = :oxid";
+				$blUpdate = (bool) $oDb->execute($sQ, [
+					':oxordernr' => $iCnt,
+					':oxid' => $this->aNovalnetDatas['custom']['inputval2']
+				]);
+				if ($blUpdate) {
+					$this->oxorder__oxordernr = new \OxidEsales\Eshop\Core\Field($iCnt);
+				}
+		 } else {
+				oxNew(Counter::class)->update($this->getCounterIdent(), $this->oxorder__oxordernr->value);
+		 }
+	   
+		$this->oNovalnetSession->setVariable('dNnOrderNo', $this->oxorder__oxordernr->value);
+	   
+		if ($this->oNovalnetSession->getVariable('sNovalnetProcessMode') == 'redirect') {
+			$this->oNovalnetSession->deleteVariable('ordrem');
+		}
+		if (!$blRecalculatingOrder) {
+			$sPaymentName = !empty($this->oNovalnetSession->getVariable('sNovalnetPaymentName')) ? $this->oNovalnetSession->getVariable('sNovalnetPaymentName') : '';
+			$this->oDb->execute('INSERT INTO novalnet_transaction_detail (ORDER_NO, PAYMENT_TYPE) VALUES (?, ?)', [$this->oxorder__oxordernr->value, $sPaymentName]);
+			$this->logNovalnetTransaction();
+			$this->updateOrderNumber(); // Send post back call to update order number
+			NovalnetUtil::clearNovalnetSession();
+		}
+		$sOrderid = ($this->oNovalnetSession->getVariable('dNnOrderNo')) ? $this->oNovalnetSession->getVariable('dNnOrderNo') : $this->getId();
+		$oBasket->setOrderId($sOrderid);
+		$this->oNovalnetSession->setVariable('sess_challenge', $this->aNovalnetDatas['custom']['inputval2']);
+		$this->updateWishlist($oBasket->getContents(), $oUser);
+		$this->updateNoticeList($oBasket->getContents(), $oUser);
+		if (!$blRecalculatingOrder) {
+			$this->updateOrderDate();
+			$this->markVouchers($oBasket, $oUser);
+			if ($this->oNovalnetSession->getVariable('sNovalnetProcessMode') == 'redirect') {
+				$sOrderId = $this->oNovalnetSession->getVariable('blSave');
+				NovalnetUtil::updateTableValues('oxorder', ['OXTRANSSTATUS' => 'OK'], 'oxid', $sOrderId);
+				$oBasket = unserialize($this->oNovalnetSession->getVariable('oBasket'));
+				$iRet = $this->nnSendOrderByEmail($sOrderId, $oBasket);
+			} else {
+				$iRet = $this->sendOrderByEmail($oUser, $oBasket, $oUserPayment);
+			}
+		} else {
+			$iRet = self::ORDER_STATE_OK;
+		}
+		NovalnetUtil::clearNovalnetRedirectSession();
+		
+		return $iRet;
+
     }
 
     protected function logNovalnetTransaction()
@@ -199,6 +218,7 @@ class Order extends Order_parent
         $aRequest               = $this->oNovalnetSession->getVariable('aNovalnetGatewayRequest');
         $this->aNovalnetData    = $this->oNovalnetSession->getVariable('aNovalnetGatewayResponse');
         $aNovalnetComments = $aStoreDetails = $aInvoiceDetails = [];
+        $status = 'NOT_FINISHED';
         $this->aNovalnetData['test_mode'] = $aRequest['transaction']['test_mode'] == '1' ? $aRequest['transaction']['test_mode'] : $this->aNovalnetData['transaction']['test_mode'];
         if ($this->aNovalnetData['transaction']['status'] == 'CONFIRMED' && !in_array($this->aNovalnetData['transaction']['payment_type'], NovalnetUtil::$aUnPaidPayments)) {
             $dAmount = (in_array($this->aNovalnetData['transaction']['payment_type'], ['INSTALMENT_INVOICE', 'INSTALMENT_DIRECT_DEBIT_SEPA']) ? $this->aNovalnetData['instalment']['cycle_amount'] : $this->aNovalnetData['transaction']['amount']);
@@ -222,6 +242,7 @@ class Order extends Order_parent
             && $this->aNovalnetData['transaction']['status'] == 'CONFIRMED' && $this->aNovalnetData['transaction']['amount'] != 0
         ) {
             $this->sNovalnetPaidDate  = NovalnetUtil::getFormatDateTime();
+            $status = 'OK';
         }
         if (in_array($this->aNovalnetData['transaction']['payment_type'], ['INVOICE', 'PREPAYMENT', 'GUARANTEED_INVOICE', 'INSTALMENT_INVOICE']) && $this->aNovalnetData['transaction']['status_code'] != '75') {
             $aInvoiceDetails = NovalnetUtil::getInvoiceComments($this->aNovalnetData, $iOrderNo);
@@ -255,8 +276,9 @@ class Order extends Order_parent
             $aInstalmentDetails = NovalnetUtil::formInstalmentData($this->aNovalnetData);
             $aPaymentData['instalment_comments'] = $aInstalmentDetails;
         }
-        NovalnetUtil::updateTableValues('oxorder', ['OXPAID' =>$this->sNovalnetPaidDate], 'OXORDERNR', $iOrderNo);
+        NovalnetUtil::updateTableValues('oxorder', ['OXPAID' => $this->sNovalnetPaidDate, 'OXTRANSSTATUS' => $status], 'OXORDERNR', $iOrderNo);
         $this->oxorder__oxpaid           = new Field($this->sNovalnetPaidDate);
+        $this->oxorder__oxtransstatus    = new Field($status);
         if(preg_match('/INSTALMENT/', $this->aNovalnetData['transaction']['payment_type'])){
 			$totalAmount = $this->aNovalnetData['instalment']['total_amount'];
 		} else {
