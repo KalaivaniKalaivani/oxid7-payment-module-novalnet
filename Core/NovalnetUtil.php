@@ -89,7 +89,9 @@ class NovalnetUtil
                 $oOrdrId  = $oOrder->oxorder__oxid->value;
                 $oOrder = oxNew(\OxidEsales\Eshop\Application\Model\Order::class);
                 $oOrder->delete($oOrdrId);
-                $oSession->deleteVariable('sess_challenge');
+                if($oSession->getVariable('sess_challenge')){
+					$oSession->deleteVariable('sess_challenge');
+				}
                 self::clearNovalnetRedirectSession();
                 self::setNovalnetPaygateError($aPaymentResponse['result']);
             }
@@ -262,6 +264,10 @@ class NovalnetUtil
         $oUser   = $oOrder->getOrderUser();
         $aRequest['customer'] = self::getCustomerData($oUser);
         $aRequest['custom']['lang'] = strtoupper(Registry::getLang()->getLanguageAbbr());
+        $aRequest['custom']['input2']  = 'oxid_Id';
+        $aRequest['custom']['inputval2'] = $oOrder->oxorder__oxid->value;
+        $aRequest['custom']['input3']  = 'paymentName';
+        $aRequest['custom']['inputval3'] = $aData['payment_details']['name'];
         return $aRequest;
     }
 
@@ -693,25 +699,18 @@ class NovalnetUtil
 
     public static function handleRedirectFailiureResponse($aNovalnetResponse)
     {
-        $aNovalnetComments = [];
-        $oSession = Registry::getSession();
-        $sOrderId = $oSession->getVariable('dNnOrderNo');
-        $aRequest = $oSession->getVariable('aNovalnetGatewayRequest');
-        self::updateTableValues('oxorder', ['OXFOLDER' => 'ORDER_STATE_PAYMENTERROR' ], 'oxid', $sOrderId);
-        $iTid = $aNovalnetResponse['tid'] ?? $aNovalnetResponse['transaction']['tid'];
-        $aNovalnetComments[] = ['NOVALNET_TRANSACTION_ID' => [$iTid]];
-        $aNovalnetComments[] = ['NOVALNET_PAYMENT_FAILED' => [$aNovalnetResponse['status_text']]];
-        if ($aRequest['transaction']['test_mode'] == '1') {
-            $aNovalnetComments[] = ['NOVALNET_TEST_ORDER' => [null]];
-        }
-        $aAdditionalData = self::getAdditionalData($sOrderId);
-        $aAdditionalData['novalnet_comments'][] = $aNovalnetComments;
-        self::updateTableValues('novalnet_transaction_detail', ['TID' => $iTid, 'AMOUNT' => $aRequest['transaction']['amount'], 'GATEWAY_STATUS' => $aNovalnetResponse['status'],  'CREDITED_AMOUNT' => 0, 'ADDITIONAL_DATA' => json_encode($aAdditionalData)],  'ORDER_NO', $sOrderId);
-        $oSession->deleteVariable('ordrem');
-        $oSession->deleteVariable('sess_challenge');
-        self::updateArticleStockFailureOrder($sOrderId);
-        self::clearNovalnetRedirectSession();
-        self::setNovalnetPaygateError($aNovalnetResponse);
+		$oSession = Registry::getSession();
+        $aTransactionDetails = ['transaction' => ['tid' => $aNovalnetResponse['tid']]];
+        $aResponse = self::doCurlRequest($aTransactionDetails, 'transaction/details');
+		$oOrdrId  = $aResponse['custom']['inputval2'];
+		$oOrder = oxNew(\OxidEsales\Eshop\Application\Model\Order::class);
+		$oOrder->delete($oOrdrId);
+		if(!empty($oSession->getVariable('sess_challenge'))){
+			$oSession->deleteVariable('sess_challenge');
+		}
+		self::updateArticleStockFailureOrder($sOrderId);
+		self::clearNovalnetRedirectSession();
+		self::setNovalnetPaygateError($aResponse['result']);
     }
 
 
@@ -826,12 +825,15 @@ class NovalnetUtil
      *
      * @return boolean
      */
-    public static function updateArticleStockFailureOrder($dOrderNo)
+    public static function updateArticleStockFailureOrder($dOrderId)
     {
-        // Get oxorder details
-        $aOrderDetails = self::getTableValues('OXID', 'oxorder', 'OXORDERNR', $dOrderNo);
+		
         // Get oxorderarticles details
-        $aOxorderArticles = DatabaseProvider::getDb(DatabaseProvider::FETCH_MODE_ASSOC)->getAll('SELECT * FROM oxorderarticles where OXORDERID = ? ', [$aOrderDetails['OXID']]);
+        $db = DatabaseProvider::getDb(DatabaseProvider::FETCH_MODE_ASSOC);
+        $moduleConfigsQuery = "SELECT * FROM oxorderarticles where OXORDERID = :OXORDERID";
+        $dbConfigs = $db->getAll($moduleConfigsQuery, [
+            ':OXORDERID' => $dOrderId
+        ]);
         foreach ($aOxorderArticles as $aOxorderArticle) {
             self::updateStock($aOxorderArticle['OXARTID'], $aOxorderArticle['OXAMOUNT']);
         }
