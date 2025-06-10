@@ -44,7 +44,7 @@ class OrderController extends OrderController_parent
                 $_POST['oxserviceproductsagreement'] = 1;
             }
         }
-
+        Registry::getSession()->deleteVariable('sRedirectPaymentProcessed');
         Registry::getLang()->setBaseLanguage($oRequest->getRequestEscapedParameter('shop_lang'));
         return $this->execute();
     }
