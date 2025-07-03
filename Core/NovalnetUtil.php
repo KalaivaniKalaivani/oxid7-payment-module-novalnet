@@ -831,7 +831,7 @@ class NovalnetUtil
         // Get oxorderarticles details
         $db = DatabaseProvider::getDb(DatabaseProvider::FETCH_MODE_ASSOC);
         $moduleConfigsQuery = "SELECT * FROM oxorderarticles where OXORDERID = :OXORDERID";
-        $dbConfigs = $db->getAll($moduleConfigsQuery, [
+        $aOxorderArticles = $db->getAll($moduleConfigsQuery, [
             ':OXORDERID' => $dOrderId
         ]);
         foreach ($aOxorderArticles as $aOxorderArticle) {
