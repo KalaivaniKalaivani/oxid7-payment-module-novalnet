@@ -53,11 +53,11 @@ window.onload = function() {
         },
     };
     const v13PaymentForm = new NovalnetPaymentForm();
-    // Initiate form
-    v13PaymentForm.initiate(postMessageData);
     if ($.cookie('oxidNovalnetpayNameCookie') != false && $.cookie('oxidNovalnetpayNameCookie') != undefined && !unchecked ) {
          postMessageData.initForm.checkPayment = $.cookie('oxidNovalnetpayNameCookie');
     }
+    // Initiate form
+    v13PaymentForm.initiate(postMessageData);
     paymentMethods.forEach((function(payment) {
         if (payment.checked == false && payment.value == 'novalnetpayments' ) {
             v13PaymentForm.uncheckPayment();
