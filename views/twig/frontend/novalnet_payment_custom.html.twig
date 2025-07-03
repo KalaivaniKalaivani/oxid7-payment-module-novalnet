@@ -14,6 +14,7 @@
             <input type="hidden" id="novalnet_payment_error" name="dynvalue[novalnet_payment_error]" />
             <iframe id="novalnetiframe" scrolling="no" width="100%" src ="{{ redirectUrl }}" frameBorder="0" allow="payment"></iframe>
             {{ script({ include: "https://code.jquery.com/jquery-3.7.0.min.js", dynamic: __oxid_include_dynamic }) }}
+            {{ script({ include: "https://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.min.js", dynamic: __oxid_include_dynamic }) }}
             {{ script({ include: "https://cdn.novalnet.de/js/pv13/checkout.js?{{ time }}", dynamic: __oxid_include_dynamic }) }}
             {{ script({ include: oViewConf.getModuleUrl('novalnet', 'js/novalnet_seamless.js'), dynamic: __oxid_include_dynamic }) }}
         {% endif %}
