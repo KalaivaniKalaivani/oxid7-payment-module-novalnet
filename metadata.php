@@ -44,6 +44,7 @@ $aModule = [
             \OxidEsales\Eshop\Application\Controller\OrderController::class          => Novalnet\Controller\OrderController::class,
             \OxidEsales\Eshop\Core\ViewConfig::class                                 => Novalnet\Core\ViewConfig::class,
             \OxidEsales\Eshop\Application\Controller\ThankYouController::class       => Novalnet\Controller\NovalnetThankyou::class,
+            \OxidEsales\Eshop\Application\Controller\Admin\OrderList::class          => Novalnet\Controller\Admin\OrderListController::class,
 
         ],
         'controllers'  => [
