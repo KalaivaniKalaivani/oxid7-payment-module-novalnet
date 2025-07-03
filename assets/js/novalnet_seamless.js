@@ -91,6 +91,7 @@ window.onload = function() {
                 document.querySelector('#payment_novalnetpayments').checked = true;
                 $( "#payment_novalnetpayments" ).trigger( "click" );
             }
+            $.cookie('oxidNovalnetpayNameCookie', data.payment_details.type);
             if (submitButton != undefined && data.payment_details.type == 'GOOGLEPAY' || data.payment_details.type == 'APPLEPAY')
             {
                 submitButton.style.display = 'none';
