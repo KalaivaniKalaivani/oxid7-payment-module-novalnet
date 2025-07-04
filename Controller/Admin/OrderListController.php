@@ -27,7 +27,7 @@ class OrderListController extends OrderListController_parent
         // Get default WHERE conditions
         $query = parent::prepareWhereQuery($sqlWhere, $fullQuery);
         // Add your own custom filter
-        $query .= " AND oxorder.oxordernr != 0";
+        $query .= " AND NOT(oxorder.oxordernr = 0 AND oxorder.oxpaymenttype = 'novalnetpayments') ";
         
         return $query;
     }
