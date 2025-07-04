@@ -710,7 +710,7 @@ class WebhookController extends FrontendController
             }
         }
 
-		if( !empty($aDbValue) && $this->eventType == "PAYMENT" && !empty($this->eventData['transaction']['amount']) && $aDbValue['Amount']== 0 && $this->eventData['transaction']['tid'] != $aDbValue['Tid']) {
+		if( !empty($aDbValue) && $this->eventType == "PAYMENT" && !empty($this->eventData['transaction']['amount']) && $aDbValue['AMOUNT'] == 0 && $this->eventData['transaction']['tid'] != $aDbValue['Tid']) {
 			$bookAmountInBiggerUnit = NovalnetUtil::formatCurrency($this->eventData['transaction']['amount'], $this->eventData['transaction']['currency']) . ' ' . $this->eventData['transaction']['currency'];
 			$aNovalnetComments[] = ['NOVALNET_AMOUNT_BOOKED_MESSAGE' => [$bookAmountInBiggerUnit, $this->eventData['transaction']['tid']]];
 			$aUpdateData = ['AMOUNT' => $this->eventData['transaction']['amount'], 'CREDITED_AMOUNT' => $this->eventData['transaction']['amount'], 'TID' => $this->eventData['transaction']['tid']];
@@ -796,9 +796,9 @@ class WebhookController extends FrontendController
 			$this->oNovalnetSession = Registry::getSession();
             $aOrderData = NovalnetUtil::getTableValues('*', 'novalnet_transaction_detail', 'ORDER_NO', $this->eventData['transaction']['order_no']);
             $bTestMode = ($this->eventData['transaction']['test_mode']);
+            $aNovalnetComments = [];
             // Form transaction comments
             $aNovalnetComments = $this->formPaymentComments($bTestMode);
-            $aAdditionalData['novalnet_comments'][] = $aNovalnetComments;
             if(empty($this->eventData['transaction']['order_no'])){
 				$orderNo = oxNew(Counter::class)->getNext('oxOrder');
 				$aTransactionDetails = [
@@ -820,6 +820,10 @@ class WebhookController extends FrontendController
                     $iCredited = $this->eventData['transaction']['amount'];
                 }
                 
+                if (($this->eventData['transaction']['amount'] == 0) && ($this->eventData['transaction']['status'] === 'CONFIRMED') && (isset($this->eventData['custom']) && isset($this->eventData['custom']['input4']) && $this->eventData['custom']['input4'] == 'ZeroBooking')) {
+					$aNovalnetComments[] = ['NOVALNET_ZERO_BOOKING_TEXT' => [null]];
+				}
+                $aAdditionalData['novalnet_comments'][] = $aNovalnetComments;
                 if (empty($aOrderData) && empty($aOrderData['ORDER_NO'])) {
                     $aAdditionalData['updated_old_txn_details'] = true;
                     $this->oDb->execute('INSERT INTO novalnet_transaction_detail (ORDER_NO, PAYMENT_TYPE, TID, AMOUNT, GATEWAY_STATUS, CREDITED_AMOUNT, ADDITIONAL_DATA) VALUES (?, ?, ?, ?, ? ,? ,?)', [$orderNo, $sPayment, $this->parentTID, $this->eventData['transaction']['amount'], $this->eventData['transaction']['status'], $iCredited, json_encode($aAdditionalData)]);
@@ -852,6 +856,7 @@ class WebhookController extends FrontendController
                 $this->displayMessage(['message' => 'Novalnet Callback Script executed successfully, Transaction details are updated']);
                 return false;
             } elseif ($aPaymentDetails['OXPAID'] == '0000-00-00 00:00:00') {
+				$aAdditionalData['novalnet_comments'][] = $aNovalnetComments;
                 if (empty($aOrderData) && empty($aOrderData['ORDER_NO'])) {
                     $aAdditionalData['updated_old_txn_details'] = true;
                     $this->oDb->execute('INSERT INTO novalnet_transaction_detail (ORDER_NO, PAYMENT_TYPE, TID, AMOUNT, GATEWAY_STATUS, CREDITED_AMOUNT, ADDITIONAL_DATA) VALUES (?, ?, ?, ?, ? ,? ,?)', [$orderNo, $sPayment, $this->parentTID, $this->eventData['transaction']['amount'], $this->eventData['transaction']['status'], 0, json_encode($aAdditionalData)]);
