@@ -725,12 +725,18 @@ class WebhookController extends FrontendController
 		
         if (empty($aDbValue)) {
             if ($this->eventData['event']['type'] == 'PAYMENT' || $this->eventData['transaction']['payment_type'] == 'ONLINE_TRANSFER_CREDIT') {
-                if (! empty($this->parentTID)) {
+                if (!empty($this->parentTID) && (empty($this->eventData['transaction']['tid'])) ) {
                     $this->eventData['transaction']['tid'] = $this->parentTID;
                 }
               
                 // Handle communication failure
                 $this->handleCommunicationFailure();
+		if ($this->eventData['transaction']['payment_type'] == 'ONLINE_TRANSFER_CREDIT' && !empty($this->parentTID)) {
+			$amount = NovalnetUtil::formatCurrency($this->eventData['transaction']['amount'], $this->eventData['transaction']['currency']) . ' ' . $this->eventData['transaction']['currency'];
+			$this->aNovalnetComments[] = ['NOVALNET_CALLBACK_CREDIT' => [$this->eventData['event']['parent_tid'], $amount, NovalnetUtil::getFormatDate(), $this->eventData['transaction']['tid']]];
+			$this->aAdditionalData['novalnet_comments'][] = $this->aNovalnetComments;
+			NovalnetUtil::updateTableValues('novalnet_transaction_detail', ['ADDITIONAL_DATA' => json_encode($this->aAdditionalData)], 'TID', $this->parentTID);
+		}
                 return false;
 
             } else {
@@ -785,9 +791,8 @@ class WebhookController extends FrontendController
     /**
      * Handle communication failure
      *
-     * @return boolean
      */
-    protected function handleCommunicationFailure()
+    protected function handleCommunicationFailure(): void
     {
         // Get shop details
         $aPaymentDetails = NovalnetUtil::getTableValues('OXPAYMENTTYPE, OXLANG, OXUSERID, OXPAID', 'oxorder', 'OXID', $this->eventData['custom']['inputval2']);
@@ -854,7 +859,6 @@ class WebhookController extends FrontendController
 				array_walk($ids, [$this, 'deleteItemById'], \OxidEsales\Eshop\Application\Model\UserBasket::class);
                 $this->sendNotifyMail($sComments);
                 $this->displayMessage(['message' => 'Novalnet Callback Script executed successfully, Transaction details are updated']);
-                return false;
             } elseif ($aPaymentDetails['OXPAID'] == '0000-00-00 00:00:00') {
 				$aAdditionalData['novalnet_comments'][] = $aNovalnetComments;
                 if (empty($aOrderData) && empty($aOrderData['ORDER_NO'])) {
@@ -867,7 +871,7 @@ class WebhookController extends FrontendController
 				
 				NovalnetUtil::updateArticleStockFailureOrder($this->eventData['custom']['inputval2']);
                 $this->displayMessage(['message' => 'Novalnet Callback Script executed successfully, Order no: '. $orderNo]);
-                return false;
+
             }
         }
     }
