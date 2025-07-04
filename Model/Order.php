@@ -264,8 +264,8 @@ class Order extends Order_parent
             $aNovalnetComments[] = ['NOVALNET_APPLEPAY_DESC' => [$this->aNovalnetData['transaction']['payment_data']['card_brand'], $this->aNovalnetData['transaction']['payment_data']['last_four']]];
         } 
         
-        if ($this->aNovalnetData['transaction']['amount'] == 0 && !empty($this->oNovalnetSession->getVariable('sNovalnetPaymentAction')) && $this->oNovalnetSession->getVariable('sNovalnetPaymentAction') == 'zero_amount') {
-            $aNovalnetComments[] = ['NOVALNET_ZERO_BOOKING_TEXT' => [null]];
+        if (($this->aNovalnetData['transaction']['amount'] == 0) && ($this->aNovalnetData['transaction']['status'] === 'CONFIRMED') && (isset($this->aNovalnetData['custom']) && isset($this->aNovalnetData['custom']['input4']) && $this->aNovalnetData['custom']['input4'] == 'ZeroBooking')) {
+		$aNovalnetComments[] = ['NOVALNET_ZERO_BOOKING_TEXT' => [null]];
         }
 
         $aComments = array_merge($aNovalnetComments, $aStoreDetails, $aInvoiceDetails);
