@@ -16,7 +16,7 @@
             {% if oOrders and not empty(oOrders) %}
                 {% set oArticleList = oView.getOrderArticleList() %}
                 {% for order in oOrders %}
-                    {% if order.oxorder__oxordernr.value != 0 %}
+                    {% if not (order.oxorder__oxordernr.value == 0  and order.oxorder__oxpaymenttype.value == 'novalnetpayments')%}
                         <div class="card card-lg mb-3">
                             <div class="card-header">
                                 <div class="row">
