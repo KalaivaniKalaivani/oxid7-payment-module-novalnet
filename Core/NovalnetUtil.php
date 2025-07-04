@@ -268,6 +268,10 @@ class NovalnetUtil
         $aRequest['custom']['inputval2'] = $oOrder->oxorder__oxid->value;
         $aRequest['custom']['input3']  = 'paymentName';
         $aRequest['custom']['inputval3'] = $aData['payment_details']['name'];
+	if (isset($aData['booking_details']['payment_action']) && $aData['booking_details']['payment_action'] == 'zero_amount' && self::formatAmount($oBasket) > 0) {
+            $aRequest ['custom']['input4'] = 'ZeroBooking';
+            $aRequest ['custom']['inputval4'] = self::formatAmount($oBasket);
+        }
         return $aRequest;
     }
 
