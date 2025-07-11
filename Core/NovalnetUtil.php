@@ -704,7 +704,7 @@ class NovalnetUtil
     public static function handleRedirectFailiureResponse($aNovalnetResponse)
     {
 		$oSession = Registry::getSession();
-        $aTransactionDetails = ['transaction' => ['tid' => $aNovalnetResponse['tid']]];
+        $aTransactionDetails = ['transaction' => ['tid' => $aNovalnetResponse['tid']], 'custom' => ['lang' => strtoupper(Registry::getLang()->getLanguageAbbr())]];
         $aResponse = self::doCurlRequest($aTransactionDetails, 'transaction/details');
 		$oOrdrId  = $aResponse['custom']['inputval2'];
 		$oOrder = oxNew(\OxidEsales\Eshop\Application\Model\Order::class);
@@ -712,7 +712,7 @@ class NovalnetUtil
 		if(!empty($oSession->getVariable('sess_challenge'))){
 			$oSession->deleteVariable('sess_challenge');
 		}
-		self::updateArticleStockFailureOrder($sOrderId);
+		self::updateArticleStockFailureOrder($oOrdrId);
 		self::clearNovalnetRedirectSession();
 		self::setNovalnetPaygateError($aResponse['result']);
     }
@@ -1071,9 +1071,11 @@ class NovalnetUtil
                 $oLang->setBaseLanguage($oOrderLang);
             }
             foreach ($aComments as $aKey => $aArray) {
-                foreach ($aArray as $sLangText => $sLangValue) {
-                    $aTranslateText .= vsprintf($oLang->translateString($sLangText), $sLangValue);
-                }
+				if(is_array($aArray)){
+					foreach ($aArray as $sLangText => $sLangValue) {
+						$aTranslateText .= vsprintf($oLang->translateString($sLangText), $sLangValue);
+					}
+				}
             }
         }
         return $aTranslateText;
