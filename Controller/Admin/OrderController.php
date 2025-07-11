@@ -201,7 +201,9 @@ class OrderController extends AdminDetailsController
                 $aResponse = NovalnetUtil::doCurlRequest($aRequest, $sUrl);
                 if (!empty($aResponse['result']['status'])) {
                     if ($aResponse['result']['status'] == 'SUCCESS' && $aResponse['result']['status_code'] == '100') {
-                        $aData['tid']      = $aRequest['transaction']['tid'];
+						if(isset($aRequest['transaction']['tid']) && !empty($aRequest['transaction']['tid'])){
+							$aData['tid']      = $aRequest['transaction']['tid'];
+						}
                         $this->updateNovalnetComments($aData, $aResponse);
                     } else {
                         $this->_aViewData[$aData['sRequestType'] . 'Failure'] = $aResponse['result']['status_text'];
@@ -339,6 +341,7 @@ class OrderController extends AdminDetailsController
         $aUpdateData = [];
         if ($aData['sRequestType'] == 'sOnHold') {
             $sLang = ($aData['sTransStatus'] == 100) ? 'NOVALNET_STATUS_UPDATE_CONFIRMED_MESSAGE' : 'NOVALNET_STATUS_UPDATE_CANCELED_MESSAGE';
+            
             if ($aData['sTransStatus'] == 100) {
 				if(!empty($aResponse ['instalment']['cycle_amount'])){
 					$sFormattedAmount = NovalnetUtil::formatCurrency($aResponse['instalment']['cycle_amount'], $oOrder->oxorder__oxcurrency->rawValue) . ' ' . $oOrder->oxorder__oxcurrency->rawValue;
@@ -376,12 +379,19 @@ class OrderController extends AdminDetailsController
                 } else {
                     $iCreditedAmount = $aResponse['transaction']['amount'];
                 }
+                $aUpdateOrders=['OXTRANSSTATUS' => 'NOT_FINISHED'];
+
                 $aUpdateData = ['CREDITED_AMOUNT' => $iCreditedAmount, 'GATEWAY_STATUS' => $aResponse['transaction']['status']];
                 if ($aResponse['transaction']['status'] == 'CONFIRMED' && isset($aResponse['transaction']['payment_type']) && $aResponse['transaction']['payment_type'] != 'INVOICE') {
-                    NovalnetUtil::updateTableValues('oxorder', ['OXPAID' => NovalnetUtil::getFormatDateTime()], 'OXORDERNR', $iOrderNo);
-                }
+                    $aUpdateOrders['OXPAID'] = NovalnetUtil::getFormatDateTime();
+                    $aUpdateOrders['OXTRANSSTATUS']= 'OK';
+                } elseif($aResponse['transaction']['payment_type'] == 'INVOICE') {
+					$aUpdateOrders['OXTRANSSTATUS']= 'OK';
+				}
+                NovalnetUtil::updateTableValues('oxorder', $aUpdateOrders, 'OXORDERNR', $iOrderNo);
             } else {
                 $aUpdateData = ['GATEWAY_STATUS' => $aResponse['transaction']['status']];
+                $aNovalnetComments[] = [$sLang => [NovalnetUtil::getFormatDate(), date('H:i:s')]];
             }
         } else if ($aData['sRequestType'] == 'sAmountRefund') {
             $currency = !empty($aResponse['transaction']['refund']['currency']) ? $aResponse['transaction']['refund']['currency'] : $aResponse['transaction']['currency'];
@@ -397,7 +407,8 @@ class OrderController extends AdminDetailsController
             $sFormattedAmount = NovalnetUtil::formatCurrency($aData['sBookAmount'], $oOrder->oxorder__oxcurrency->rawValue) . ' ' . $oOrder->oxorder__oxcurrency->rawValue;
             $aNovalnetComments[] = ['NOVALNET_AMOUNT_BOOKED_MESSAGE' => [$sFormattedAmount, $aResponse['transaction']['tid']]];
             $aUpdateData = ['AMOUNT' => $aData['sBookAmount'], 'CREDITED_AMOUNT' => $aData['sBookAmount'], 'TID' => $aResponse['transaction']['tid']];
-            NovalnetUtil::updateTableValues('oxorder', ['OXPAID' => NovalnetUtil::getFormatDateTime()], 'OXORDERNR', $iOrderNo);
+            $aUpdateOrders=['OXTRANSSTATUS' => 'OK', 'OXPAID' => NovalnetUtil::getFormatDateTime()];
+            NovalnetUtil::updateTableValues('oxorder', $aUpdateOrders, 'OXORDERNR', $iOrderNo);
         }
         if (!empty($aNovalnetComments)) {
             $aComments = array_merge($aNovalnetComments, $aInvoiceDetails, $aBankDetails);
